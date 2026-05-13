@@ -22,8 +22,8 @@ parser.add_argument("--target_layers", type=str, default="conv1,layer1,layer2,la
                           Follows the naming scheme of the Pytorch module used""")
 parser.add_argument("--d_probe", type=str, default="broden", 
                     choices = ["imagenet_broden", "cifar100_val", "imagenet_val", "broden", "imagenet_broden"])
-parser.add_argument("--concept_set", type=str, default="data/20k.txt", help="Path to txt file containing concept set")
-parser.add_argument("--batch_size", type=int, default=200, help="Batch size when running CLIP/target model")
+parser.add_argument("--concept_set", type=str, default="data/3k.txt", help="Path to txt file containing concept set")
+parser.add_argument("--batch_size", type=int, default=16, help="Batch size when running CLIP/target model")
 parser.add_argument("--device", type=str, default="cuda", help="whether to use GPU/which gpu")
 parser.add_argument("--activation_dir", type=str, default="saved_activations", help="where to save activations")
 parser.add_argument("--result_dir", type=str, default="results", help="where to save results")

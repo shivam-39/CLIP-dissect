@@ -19,6 +19,11 @@ This is the official repository for our paper: [CLIP-Dissect: Automatic Descript
 We do not provide download instructions for ImageNet data, to evaluate using your own copy of ImageNet validation set you must set 
 the correct path in `DATASET_ROOTS["imagenet_val"]` variable in `data_utils.py`.
 
+```
+wget https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz
+tar -xzf imagenette2-160.tgz
+```
+
 ## Quickstart:
 
 This will dissect 5 layers of ResNet-50(ImageNet) using Broden as the probing dataset. Results will be saved in `results/resnet50_{datetime}/descriptions.csv`.
