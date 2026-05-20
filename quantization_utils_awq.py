@@ -1,5 +1,5 @@
 """
-Production-ready AWQ-style weight quantization module for PyTorch models.
+AWQ weight quantization module for PyTorch models.
 
 This module implements CUDA-compatible model quantization using symmetric INT8
 quantization inspired by the AWQ paper. Unlike PyTorch's eager quantization APIs
@@ -37,8 +37,6 @@ Tradeoffs between FP16, INT8, and INT4:
   FP16 good baseline when latency < 20% acceptable.
   INT4 useful for inference-only, parameter-constrained settings.
 
-Author: Production Quantization Framework
-License: MIT
 """
 
 import torch
@@ -92,23 +90,24 @@ class AWQLinear(nn.Module):
         self.qmax = 2 ** (num_bits - 1) - 1
         
         # INT8 packed weights (stored as int8 on GPU)
+        # Create on CPU first to avoid CUDA kernel issues, then move to device
         self.register_buffer(
             "weight_int8",
-            torch.zeros((out_features, in_features), dtype=torch.int8, device=device)
+            torch.zeros((out_features, in_features), dtype=torch.int8).to(device)
         )
         
         # Per-group scales for dequantization
         num_groups = (in_features + self.group_size - 1) // self.group_size
         self.register_buffer(
             "scales",
-            torch.ones((out_features, num_groups), dtype=torch.float32, device=device)
+            torch.ones((out_features, num_groups), dtype=torch.float32).to(device)
         )
         
         # Optional bias
         if bias:
             self.register_buffer(
                 "bias",
-                torch.zeros(out_features, dtype=torch.float32, device=device)
+                torch.zeros(out_features, dtype=torch.float32).to(device)
             )
         else:
             self.register_buffer("bias", None)
@@ -230,10 +229,11 @@ class AWQConv2d(nn.Module):
         self.qmax = 2 ** (num_bits - 1) - 1
         
         # INT8 packed weights
+        # Create on CPU first to avoid CUDA kernel issues, then move to device
         weight_shape = (out_channels, in_channels, self.kernel_size[0], self.kernel_size[1])
         self.register_buffer(
             "weight_int8",
-            torch.zeros(weight_shape, dtype=torch.int8, device=device)
+            torch.zeros(weight_shape, dtype=torch.int8).to(device)
         )
         
         # Per-group scales
@@ -241,14 +241,14 @@ class AWQConv2d(nn.Module):
         num_groups = (total_in_features + self.group_size - 1) // self.group_size
         self.register_buffer(
             "scales",
-            torch.ones((out_channels, num_groups), dtype=torch.float32, device=device)
+            torch.ones((out_channels, num_groups), dtype=torch.float32).to(device)
         )
         
         # Optional bias
         if bias:
             self.register_buffer(
                 "bias",
-                torch.zeros(out_channels, dtype=torch.float32, device=device)
+                torch.zeros(out_channels, dtype=torch.float32).to(device)
             )
         else:
             self.register_buffer("bias", None)
