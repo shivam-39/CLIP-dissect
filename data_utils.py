@@ -3,7 +3,7 @@ import torch
 import pandas as pd
 from torchvision import datasets, transforms, models
 
-DATASET_ROOTS = {"imagenet_val": "imagenette2-160/val/",
+DATASET_ROOTS = {"imagenet_val": "imagenette2-320/val/",
                 "broden": "data/broden1_224/images/"}
 
 

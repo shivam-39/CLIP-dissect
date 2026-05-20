@@ -14,5 +14,5 @@ data/resnet18_places365.pth.tar
 results/
 *.zip
 
-imagenette2-160/
+imagenette2-320/
 data/
