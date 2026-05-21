@@ -876,6 +876,41 @@ def example_fp16_comparison():
         print(f"  {metric_name}: {metric_value:.6f}")
 
 
+def quantize_given_mdodel(target_name, quantization_bits, quantization_group_size, device):
+    """
+    Example: Quantize a given model instance.
+    
+    This function demonstrates how to quantize an arbitrary model instance
+    using the quantize_model_awq function.
+    """
+    import data_utils
+    print(f"Loading {target_name} model for quantization...")
+    original_model, _ = data_utils.get_target_model(target_name, device)
+    
+    print(f"Quantizing {target_name} with {quantization_bits}-bit AWQ quantization...")
+    quantized_model = quantize_model_awq(
+        original_model,
+        num_bits=quantization_bits,
+        device=device,
+        quantize_linear=True,
+        quantize_conv=True,
+        group_size=quantization_group_size,
+    )
+    
+    print(f"Model quantized successfully!")
+    
+    # Get model size statistics
+    model_stats = get_quantized_model_size(quantized_model)
+    print(f"Model size statistics:")
+    print(f"  INT8 parameters: {model_stats['int8_params_mb']:.2f} MB")
+    print(f"  FP32 equivalent: {model_stats['total_params_mb']:.2f} MB")
+    print(f"  Compression ratio: {model_stats['compression_ratio']:.2f}x")
+    
+    # Use quantized model for subsequent operations
+    target_model_to_use = quantized_model
+    return target_model_to_use
+
+
 if __name__ == "__main__":
     print("AWQ Quantization Module Loaded")
     print("=" * 60)
