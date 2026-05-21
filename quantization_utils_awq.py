@@ -895,6 +895,7 @@ def quantize_given_mdodel(target_name, quantization_bits, quantization_group_siz
         quantize_linear=True,
         quantize_conv=True,
         group_size=quantization_group_size,
+        save_path=f"saved_activations/{target_name}_quantized.pt"
     )
     
     print(f"Model quantized successfully!")
