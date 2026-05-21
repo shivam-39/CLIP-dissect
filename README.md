@@ -19,8 +19,9 @@ This is the official repository for our paper: [CLIP-Dissect: Automatic Descript
 We do not provide download instructions for ImageNet data, to evaluate using your own copy of ImageNet validation set you must set 
 the correct path in `DATASET_ROOTS["imagenet_val"]` variable in `data_utils.py`.
 
+https://github.com/fastai/imagenette
 ```
-wget https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-160.tgz
+wget https://s3.amazonaws.com/fast-ai-imageclas/imagenette2-320.tgz
 tar -xzf imagenette2-160.tgz
 ```
 
