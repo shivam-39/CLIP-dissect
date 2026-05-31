@@ -16,3 +16,6 @@ results/
 
 imagenette2-320/
 data/
+model_cache/
+clip_dissect_demo_data/
+clip_dissect_demo_outputs/

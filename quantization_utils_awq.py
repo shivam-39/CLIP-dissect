@@ -28,7 +28,7 @@ How AWQ-style quantization avoids this limitation:
 - Uses standard CUDA matrix multiplication kernels (cublas)
 - Avoids PyTorch's quantization backend entirely
 
-Tradeoffs between FP16, INT8, and INT4:
+Supported Quantization Bit-widths:
 - FP16: 50% memory/bandwidth reduction, ~2-3x speedup, good accuracy
 - INT8: 75% memory reduction, 3-4x speedup, minor accuracy loss (<1%)
 - INT4: 87.5% memory reduction, 4-6x speedup, more accuracy loss (2-5%)
@@ -36,6 +36,12 @@ Tradeoffs between FP16, INT8, and INT4:
   INT8 sweet spot: balance of compression, speed, and accuracy preservation.
   FP16 good baseline when latency < 20% acceptable.
   INT4 useful for inference-only, parameter-constrained settings.
+
+Bit-width Configuration:
+- Pass num_bits=8 for INT8 quantization (default)
+- Pass num_bits=4 for INT4 quantization
+- INT4 uses 4-bit symmetric range [-8, 7]
+- INT8 uses 8-bit symmetric range [-128, 127]
 
 """
 
@@ -349,12 +355,13 @@ def compute_quantization_scales(
     
     Args:
         weight: Original FP32 weights of shape (out_features, in_features)
-        num_bits: Bit-width for quantization
+        num_bits: Bit-width for quantization (4 or 8)
         group_size: Group size for group-wise quantization (0 = per-channel)
         
     Returns:
         Tuple of (quantized_weight, scales)
     """
+    qmin = -(2 ** (num_bits - 1))
     qmax = 2 ** (num_bits - 1) - 1
     
     if group_size == 0:
@@ -363,8 +370,8 @@ def compute_quantization_scales(
         scales = weight.abs().amax(dim=1, keepdim=True) / qmax  # (out_channels, 1)
         scales = scales.squeeze(1)  # (out_channels,)
         
-        # Quantize: clip to int8 range
-        weight_q = (weight / scales.unsqueeze(1)).round().clamp(-128, 127).to(torch.int8)
+        # Quantize: clip to appropriate range based on num_bits
+        weight_q = (weight / scales.unsqueeze(1)).round().clamp(qmin, qmax).to(torch.int8)
         
         # Return as per-group format for compatibility
         scales = scales.unsqueeze(1)  # (out_channels, 1)
@@ -389,10 +396,10 @@ def compute_quantization_scales(
             group_scale = group_weights.abs().amax(dim=1, keepdim=False) / qmax  # (out_channels,)
             scales[:, g] = group_scale
             
-            # Quantize group
+            # Quantize group with appropriate range based on num_bits
             weight_q[:, start_idx:end_idx] = (
                 group_weights / group_scale.unsqueeze(1)
-            ).round().clamp(-128, 127)
+            ).round().clamp(qmin, qmax)
         
         weight_q = weight_q.to(torch.int8)
     
@@ -800,15 +807,18 @@ def get_quantized_model_size(model: nn.Module) -> Dict[str, float]:
 # API Examples for Notebook Usage
 # ============================================================================
 
-def example_resnet50_quantization():
+def example_resnet50_quantization(num_bits: int = 8):
     """
     Example: Quantize ResNet50 and run inference.
     
     This example demonstrates the typical workflow:
     1. Load a model
-    2. Quantize it with AWQ
+    2. Quantize it with AWQ (supports INT4 or INT8)
     3. Run inference
     4. Save checkpoint
+    
+    Args:
+        num_bits: Quantization bit-width (4 or 8, default: 8)
     """
     try:
         import torchvision.models as models
@@ -819,12 +829,12 @@ def example_resnet50_quantization():
     print("Loading ResNet50...")
     model = models.resnet50(pretrained=False)
     
-    print("Quantizing model...")
+    print(f"Quantizing model with {num_bits}-bit quantization...")
     quantized = quantize_model_awq(
         model,
-        num_bits=8,
+        num_bits=num_bits,
         device="cuda",
-        save_path="resnet50_quantized.pt"
+        save_path=f"resnet50_quantized_{num_bits}bit.pt"
     )
     
     print("Creating test input...")
@@ -838,14 +848,17 @@ def example_resnet50_quantization():
     print(f"Model quantization complete!")
 
 
-def example_fp16_comparison():
+def example_fp16_comparison(num_bits: int = 8):
     """
-    Example: Compare FP16 and INT8 quantization.
+    Example: Compare FP16 and quantized model outputs.
     
     Demonstrates how to:
     1. Create FP16 baseline
-    2. Create INT8 quantized model
+    2. Create quantized model (INT4 or INT8)
     3. Compare outputs
+    
+    Args:
+        num_bits: Quantization bit-width (4 or 8, default: 8)
     """
     try:
         import torchvision.models as models
@@ -860,18 +873,18 @@ def example_fp16_comparison():
     print("Converting to FP16...")
     model_fp16 = convert_fp16(model.clone(), device="cuda")
     
-    # INT8 quantization
-    print("Quantizing to INT8...")
-    model_int8 = quantize_model_awq(model, num_bits=8, device="cuda")
+    # Quantized model (INT4 or INT8)
+    print(f"Quantizing to INT{num_bits}...")
+    model_quantized = quantize_model_awq(model, num_bits=num_bits, device="cuda")
     
     # Test input
     test_input = torch.randn(1, 3, 224, 224, device="cuda")
     
     # Compare
     print("Comparing outputs...")
-    metrics = compare_model_outputs(model_fp16, model_int8, test_input)
+    metrics = compare_model_outputs(model_fp16, model_quantized, test_input)
     
-    print("\nComparison Metrics (FP16 vs INT8):")
+    print(f"\nComparison Metrics (FP16 vs INT{num_bits}):")
     for metric_name, metric_value in metrics.items():
         print(f"  {metric_name}: {metric_value:.6f}")
 
@@ -882,6 +895,12 @@ def quantize_given_mdodel(target_name, quantization_bits, quantization_group_siz
     
     This function demonstrates how to quantize an arbitrary model instance
     using the quantize_model_awq function.
+    
+    Args:
+        target_name: Name of the model to quantize
+        quantization_bits: Bit-width for quantization (4 or 8)
+        quantization_group_size: Group size for group-wise quantization (0 for per-channel)
+        device: Device to quantize on (typically "cuda")
     """
     import data_utils
     print(f"Loading {target_name} model for quantization...")
@@ -895,7 +914,7 @@ def quantize_given_mdodel(target_name, quantization_bits, quantization_group_siz
         quantize_linear=True,
         quantize_conv=True,
         group_size=quantization_group_size,
-        save_path=f"saved_activations/{target_name}_quantized.pt"
+        save_path=f"saved_activations/{target_name}_quantized_{quantization_bits}bit.pt"
     )
     
     print(f"Model quantized successfully!")
@@ -915,11 +934,17 @@ def quantize_given_mdodel(target_name, quantization_bits, quantization_group_siz
 if __name__ == "__main__":
     print("AWQ Quantization Module Loaded")
     print("=" * 60)
+    print("Supported quantization bit-widths: 4-bit, 8-bit")
     print("Available functions:")
-    print("  - quantize_model_awq(): Main quantization function")
+    print("  - quantize_model_awq(): Main quantization function (num_bits=4 or 8)")
     print("  - convert_fp16(): FP16 baseline conversion")
     print("  - compare_model_outputs(): Compare original vs quantized")
     print("  - save_quantized_model(): Save checkpoint")
     print("  - load_quantized_model(): Load checkpoint")
     print("  - run_inference_quantized(): Run inference with autocast")
+    print("=" * 60)
+    print("Examples:")
+    print("  - example_resnet50_quantization(num_bits=8)  # INT8 quantization")
+    print("  - example_resnet50_quantization(num_bits=4)  # INT4 quantization")
+    print("  - example_fp16_comparison(num_bits=4)        # Compare FP16 vs INT4")
     print("=" * 60)
