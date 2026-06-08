@@ -15,6 +15,7 @@ results/
 *.zip
 
 imagenette2-320/
+imagenet-val/
 data/
 model_cache/
 clip_dissect_demo_data/
