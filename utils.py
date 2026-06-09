@@ -17,19 +17,19 @@ def get_activation(outputs, mode):
     if mode=='avg':
         def hook(model, input, output):
             if len(output.shape)==4: #CNN layers
-                outputs.append(output.mean(dim=[2,3]).detach())
+                outputs.append(output.mean(dim=[2,3]).detach().cpu())
             elif len(output.shape)==3: #ViT
-                outputs.append(output[:, 0].clone())
+                outputs.append(output[:, 0].detach().cpu())
             elif len(output.shape)==2: #FC layers
-                outputs.append(output.detach())
+                outputs.append(output.detach().cpu())
     elif mode=='max':
         def hook(model, input, output):
             if len(output.shape)==4: #CNN layers
-                outputs.append(output.amax(dim=[2,3]).detach())
+                outputs.append(output.amax(dim=[2,3]).detach().cpu())
             elif len(output.shape)==3: #ViT
-                outputs.append(output[:, 0].clone())
+                outputs.append(output[:, 0].detach().cpu())
             elif len(output.shape)==2: #FC layers
-                outputs.append(output.detach())
+                outputs.append(output.detach().cpu())
     return hook
 
 def get_save_names(clip_name, target_name, target_layer, d_probe, concept_set, pool_mode, save_dir):
@@ -120,27 +120,33 @@ def get_clip_text_features(model, text, batch_size=1000):
     text_features = torch.cat(text_features, dim=0)
     return text_features
 
-def save_activations(clip_name, target_name, target_layers, d_probe, 
+def save_activations(clip_name, target_name, target_layers, d_probe,
                      concept_set, batch_size, device, pool_mode, save_dir):
-    
+
+    save_names = get_save_names(clip_name=clip_name, target_name=target_name,
+                                target_layer='{}', d_probe=d_probe, concept_set=concept_set,
+                                pool_mode=pool_mode, save_dir=save_dir)
+    target_save_name, clip_save_name, text_save_name = save_names
+
+    target_layer_save_names = {layer: target_save_name.format(layer) for layer in target_layers}
+    if (_all_saved(target_layer_save_names) and
+            os.path.exists(clip_save_name) and
+            os.path.exists(text_save_name)):
+        return
+
     clip_model, clip_preprocess = clip.load(clip_name, device=device)
     target_model, target_preprocess = data_utils.get_target_model(target_name, device)
     #setup data
     data_c = data_utils.get_data(d_probe, clip_preprocess)
     data_t = data_utils.get_data(d_probe, target_preprocess)
 
-    with open(concept_set, 'r') as f: 
+    with open(concept_set, 'r') as f:
         words = (f.read()).split('\n')
     #ignore empty lines
     words = [i for i in words if i!=""]
-    
+
     text = clip.tokenize(["{}".format(word) for word in words]).to(device)
-    
-    save_names = get_save_names(clip_name = clip_name, target_name = target_name,
-                                target_layer = '{}', d_probe = d_probe, concept_set = concept_set,
-                                pool_mode=pool_mode, save_dir = save_dir)
-    target_save_name, clip_save_name, text_save_name = save_names
-    
+
     save_clip_text_features(clip_model, text, text_save_name, batch_size)
     save_clip_image_features(clip_model, data_c, clip_save_name, batch_size, device)
     save_target_activations(target_model, data_t, target_save_name, target_layers,
@@ -155,11 +161,11 @@ def get_similarity_from_activations(target_save_name, clip_save_name, text_save_
     with torch.no_grad():
         image_features /= image_features.norm(dim=-1, keepdim=True)
         text_features /= text_features.norm(dim=-1, keepdim=True)
-        clip_feats = (image_features @ text_features.T)
+        clip_feats = (image_features @ text_features.T).half()
     del image_features, text_features
     torch.cuda.empty_cache()
-    
-    target_feats = torch.load(target_save_name, map_location='cpu')
+
+    target_feats = torch.load(target_save_name, map_location='cpu').half()
     similarity = similarity_fn(clip_feats, target_feats, device=device)
     
     del clip_feats

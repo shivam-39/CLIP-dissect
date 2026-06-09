@@ -51,16 +51,16 @@ def soft_wpmi(clip_feats, target_feats, top_k=100, a=10, lam=1, device='cuda',
     
     with torch.no_grad():
         torch.cuda.empty_cache()
-        clip_feats = torch.nn.functional.softmax(a*clip_feats, dim=1)
-
+        # softmax is per-image (dim=1), so compute it inside the loop on just the
+        # top-k rows — avoids materializing the full fp32 matrix in RAM
         inds = torch.topk(target_feats, dim=0, k=top_k)[1]
         prob_d_given_e = []
 
         p_in_examples = p_start-(torch.arange(start=0, end=top_k)/top_k*(p_start-p_end)).unsqueeze(1).to(device)
         for orig_id in tqdm(range(target_feats.shape[1])):
-            
-            curr_clip_feats = clip_feats.gather(0, inds[:,orig_id:orig_id+1].expand(-1,clip_feats.shape[1])).to(device)
-            
+            curr_clip_feats = clip_feats.gather(0, inds[:,orig_id:orig_id+1].expand(-1,clip_feats.shape[1]))
+            curr_clip_feats = torch.nn.functional.softmax(a * curr_clip_feats.float(), dim=1).to(device)
+
             curr_p_d_given_e = 1+p_in_examples*(curr_clip_feats-1)
             curr_p_d_given_e = torch.sum(torch.log(curr_p_d_given_e+min_prob), dim=0, keepdim=True)
             prob_d_given_e.append(curr_p_d_given_e)
@@ -79,14 +79,13 @@ def wpmi(clip_feats, target_feats, top_k=28, a=2, lam=0.6, device='cuda', min_pr
     with torch.no_grad():
         torch.cuda.empty_cache()
         
-        clip_feats = torch.nn.functional.softmax(a*clip_feats, dim=1)
-
         inds = torch.topk(target_feats, dim=0, k=top_k)[1]
         prob_d_given_e = []
 
         for orig_id in tqdm(range(target_feats.shape[1])):
             torch.cuda.empty_cache()
-            curr_clip_feats = clip_feats.gather(0, inds[:,orig_id:orig_id+1].expand(-1,clip_feats.shape[1])).to(device)
+            curr_clip_feats = clip_feats.gather(0, inds[:,orig_id:orig_id+1].expand(-1,clip_feats.shape[1]))
+            curr_clip_feats = torch.nn.functional.softmax(a * curr_clip_feats.float(), dim=1).to(device)
             curr_p_d_given_e = torch.sum(torch.log(curr_clip_feats+min_prob), dim=0, keepdim=True)
             prob_d_given_e.append(curr_p_d_given_e)
 

@@ -2,8 +2,11 @@ import os
 import torch
 import pandas as pd
 from torchvision import datasets, transforms, models
+import timm
+from timm.data import resolve_data_config
+from timm.data.transforms_factory import create_transform
 
-DATASET_ROOTS = {"imagenet_val": "YOUR_PATH/ImageNet_val/",
+DATASET_ROOTS = {"imagenet_val": "data/imagenette2-320/val/",
                 "broden": "data/broden1_224/images/"}
 
 
@@ -35,7 +38,14 @@ def get_target_model(target_name, device):
         weights = eval("models.{}_Weights.IMAGENET1K_V1".format(target_name_cap))
         preprocess = weights.transforms()
         target_model = eval("models.{}(weights=weights).to(device)".format(target_name))
-    
+    elif "tiny_vit" in target_name:
+        # timm >= 1.0 defaults tiny_vit to the 22k model (21841 classes); use the in1k fine-tuned
+        # variant explicitly so head outputs 1000 classes to match the evaluation code
+        model_tag = target_name if '.' in target_name else f"{target_name}.dist_in22k_ft_in1k"
+        target_model = timm.create_model(model_tag, pretrained=True).to(device)
+        config = resolve_data_config({}, model=target_model)
+        preprocess = create_transform(**config)
+
     target_model.eval()
     return target_model, preprocess
 
