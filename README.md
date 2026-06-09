@@ -16,8 +16,13 @@ This is the official repository for our paper: [CLIP-Dissect: Automatic Descript
 4. Download the Broden dataset (images only) using `bash dlbroden.sh`
 5. (Optional) Download ResNet-18 pretrained on Places-365: `bash dlzoo_example.sh`
 
-We do not provide download instructions for ImageNet data, to evaluate using your own copy of ImageNet validation set you must set 
-the correct path in `DATASET_ROOTS["imagenet_val"]` variable in `data_utils.py`.
+For imagent validation dataset:
+```
+kaggle datasets download -d titericz/imagenet1k-val
+unzip imagenet1k-val.zip
+```
+
+You must set the correct path in `DATASET_ROOTS["imagenet_val"]` variable in `data_utils.py`.
 
 ## Quickstart:
 
